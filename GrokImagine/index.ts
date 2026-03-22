@@ -41,7 +41,7 @@ const plugin = {
         fs.writeFileSync(outputPath, Buffer.from(image.base64, "base64"));
         
         return {
-            content: `Image generated and saved to: ${outputPath}`,
+            content: "Image generated successfully. The image has been attached to the conversation.",
             attachments: [
                 {
                     type: "image",
