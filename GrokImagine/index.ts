@@ -207,7 +207,7 @@ export default function register(api: OpenClawPluginApi) {
           `xAI video poll status. Request ID: ${request_id}, Status: ${JSON.stringify(pollData)}`,
         );
 
-        if (pollData.status === "completed" && pollData.video?.url) {
+        if (pollData.status === "done" && pollData.video?.url) {
           videoUrl = pollData.video.url;
           api.logger.info(
             `xAI video generation completed. Request ID: ${request_id}`,
