@@ -186,9 +186,10 @@ export default function register(api: OpenClawPluginApi) {
         throw new Error(`xAI Video start error: ${err}`);
       }
 
-      const { request_id } = await startRes.json();
+      const startData = await startRes.json();
+      const { request_id } = startData;
       api.logger.info(
-        `xAI video generation started. Request ID: ${request_id}`,
+        `xAI video generation started. Request ID: ${request_id}, Data: ${JSON.stringify(startData)}`,
       );
 
       // 2. Poll for completion (max ~3 minutes)
@@ -206,7 +207,7 @@ export default function register(api: OpenClawPluginApi) {
 
         const pollData = await pollRes.json();
         api.logger.info(
-          `xAI video poll status. Request ID: ${request_id}, Status: ${pollData.status}`,
+          `xAI video poll status. Request ID: ${request_id}, Status: ${JSON.stringify(pollData)}`,
         );
 
         if (pollData.status === "completed" && pollData.video?.url) {
