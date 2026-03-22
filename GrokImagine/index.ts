@@ -1,5 +1,11 @@
 import { Type } from "@sinclair/typebox";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import { createXai } from "@ai-sdk/xai";
+import { experimental_generateImage as generateImage } from "ai";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as crypto from "node:crypto";
+import * as os from "node:os";
 
 function getXaiKey(api: OpenClawPluginApi): string | undefined {
   const providers = (api.config as any).providers as Record<string, any> | undefined;
@@ -25,37 +31,20 @@ const plugin = {
           throw new Error("xAI API key not found. Please bind the xAI provider or set XAI_API_KEY.");
         }
 
-        const response = await fetch("https://api.x.ai/v1/images/generations", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: "x-ai/grok-imagine-image-pro",
+        const xai = createXai({ apiKey });
+        const { image } = await generateImage({
+            model: xai.image("grok-imagine-image"),
             prompt: params.prompt,
-            n: 1,
-            response_format: "url"
-          })
         });
 
-        if (!response.ok) {
-          const body = await response.text();
-          throw new Error(`xAI API Error: ${response.status} ${response.statusText} - ${body}`);
-        }
-
-        const data = await response.json() as any;
-        const imageUrl = data.data?.[0]?.url;
-
-        if (!imageUrl) {
-          throw new Error("No image URL returned from xAI API.");
-        }
-
+        const outputPath = path.join(os.tmpdir(), `grok-image-${crypto.randomUUID()}.png`);
+        fs.writeFileSync(outputPath, Buffer.from(image.base64, "base64"));
+        
         return {
           content: [
-            { type: "text", text: `Image generated successfully: ${imageUrl}` }
+            { type: "text", text: `Image generated and saved to: ${outputPath}` }
           ],
-          details: { url: imageUrl }
+          details: { path: outputPath }
         };
       }
     });
@@ -74,14 +63,18 @@ const plugin = {
           throw new Error("xAI API key not found. Please bind the xAI provider or set XAI_API_KEY.");
         }
 
-        const response = await fetch("https://api.x.ai/v1/video/generate", {
+        const response = await fetch("https://api.x.ai/v1/videos/generations", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`
           },
           body: JSON.stringify({
-            prompt: params.prompt
+            model: "grok-imagine-video",
+            prompt: params.prompt,
+            duration: 10,
+            aspect_ratio: "16:9",
+            resolution: "720p"
           })
         });
 
@@ -90,22 +83,42 @@ const plugin = {
           throw new Error(`xAI API Error: ${response.status} ${response.statusText} - ${body}`);
         }
 
-        const data = await response.json() as any;
-        const videoUrl = data.url || data.video_url || data.data?.[0]?.url;
-
-        let successText = "Video generation request successful.";
-        if (videoUrl) {
-          successText += ` Video URL: ${videoUrl}`;
-        } else if (data.id || data.job_id) {
-          successText += ` Job ID: ${data.id || data.job_id}`;
+        const { request_id } = await response.json() as any;
+        if (!request_id) {
+          throw new Error("No request_id returned from xAI Video API.");
         }
-        successText += `\n\nRaw response: ${JSON.stringify(data, null, 2)}`;
+
+        let videoUrl = "";
+        let finalData: any = {};
+
+        // Polling loop
+        while (true) {
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          
+          const pollRes = await fetch(`https://api.x.ai/v1/videos/${request_id}`, {
+            headers: { "Authorization": `Bearer ${apiKey}` }
+          });
+
+          if (!pollRes.ok) {
+            const body = await pollRes.text();
+            throw new Error(`xAI Video Poll Error: ${pollRes.status} ${pollRes.statusText} - ${body}`);
+          }
+
+          finalData = await pollRes.json() as any;
+
+          if (finalData.status === "done") {
+            videoUrl = finalData.video?.url;
+            break;
+          } else if (finalData.status === "expired" || finalData.status === "failed") {
+            throw new Error(`Video generation ${finalData.status}`);
+          }
+        }
 
         return {
           content: [
-            { type: "text", text: successText }
+            { type: "text", text: `Video generated successfully! URL: ${videoUrl}\nDuration: ${finalData.video?.duration}s` }
           ],
-          details: { videoUrl, data }
+          details: { videoUrl, finalData }
         };
       }
     });
