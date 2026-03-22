@@ -1,0 +1,33 @@
+{
+  "name": "@openclaw/wallet",
+  "version": "1.0.0",
+  "description": "Ethereum Wallet plugin for OpenClaw using viem",
+  "type": "module",
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [
+    "openclaw",
+    "wallet",
+    "ethereum",
+    "crypto",
+    "viem"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "@sinclair/typebox": "^0.34.48",
+    "@types/node": "^22.0.0",
+    "openclaw": "latest",
+    "typescript": "^5.0.0"
+  }
+}
