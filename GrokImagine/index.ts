@@ -1,136 +1,230 @@
-import { Type } from "@sinclair/typebox";
+// xai-imagine-plugin/src/index.ts
+// OpenClaw plugin for xAI Grok Imagine (Image + Video)
+// Compatible with latest released OpenClaw (pre-March 15 2026 Plugin SDK refactor)
+// Fixed: added required 'label' field (mandatory in AgentTool) + full execute signature + details
+
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
-import { createXai } from "@ai-sdk/xai";
-import { experimental_generateImage as generateImage } from "ai";
-import * as fs from "node:fs";
-import * as path from "node:path";
-import * as crypto from "node:crypto";
-import * as os from "node:os";
+import { Type } from "@sinclair/typebox";
 
-function getXaiKey(api: OpenClawPluginApi): string | undefined {
-  const providers = (api.config as any).providers as Record<string, any> | undefined;
-  return providers?.xai?.apiKey || process.env.XAI_API_KEY;
-}
+const XAI_BASE_URL = "https://api.x.ai/v1";
 
-const plugin = {
-  id: "grok-imagine",
-  name: "Grok Imagine",
-  description: "Provides image and video generation tools via xAI's Grok Imagine model",
-  register(api: OpenClawPluginApi) {
-    // 1. Image Generation Tool
-    api.registerTool({
-      name: "grok_imagine_image",
-      label: "Grok Imagine Image",
-      description: "Generate an image from a text prompt using the Grok Imagine model.",
-      parameters: Type.Object({
-        prompt: Type.String({ description: "A detailed description of the image to generate" })
+export default function register(api: OpenClawPluginApi) {
+  // ====================== IMAGE GENERATION TOOL ======================
+  api.registerTool({
+    name: "xai_generate_image",
+    label: "xAI Grok Imagine Image",
+    description:
+      "Generate one or more high-quality images using xAI Grok Imagine. Returns direct MEDIA URLs so Telegram displays them instantly.",
+    parameters: Type.Object({
+      prompt: Type.String({
+        description: "Detailed text prompt for the image",
       }),
-      async execute(_id: string, params: Record<string, any>) {
-        const apiKey = getXaiKey(api);
-        if (!apiKey) {
-          throw new Error("xAI API key not found. Please bind the xAI provider or set XAI_API_KEY.");
-        }
-
-        const xai = createXai({ apiKey });
-        const { image } = await generateImage({
-            model: xai.image("grok-imagine-image"),
-            prompt: params.prompt,
-        });
-
-        const outputPath = path.join(os.tmpdir(), `grok-image-${crypto.randomUUID()}.png`);
-        fs.writeFileSync(outputPath, Buffer.from(image.base64, "base64"));
-        
+      n: Type.Optional(
+        Type.Integer({
+          description: "Number of images (1-4)",
+          minimum: 1,
+          maximum: 4,
+          default: 1,
+        }),
+      ),
+      aspect_ratio: Type.Optional(
+        Type.String({
+          description: 'Aspect ratio e.g. "16:9", "1:1", "9:16"',
+          default: "1:1",
+        }),
+      ),
+    }),
+    async execute(
+      toolCallId: string,
+      params: any,
+      _signal?: AbortSignal,
+      _onUpdate?: any,
+    ) {
+      const apiKey = process.env.XAI_API_KEY;
+      if (!apiKey) {
         return {
-            content: "Image generated successfully. The image has been attached to the conversation.",
-            attachments: [
-                {
-                    type: "image",
-                    path: outputPath,
-                    mimeType: "image/png"
-                }
-            ]
-        } as any;
-      }
-    });
-
-    // 2. Video Generation Tool
-    api.registerTool({
-      name: "grok_imagine_video",
-      label: "Grok Imagine Video",
-      description: "Generate a video from a text prompt using the Grok Imagine model.",
-      parameters: Type.Object({
-        prompt: Type.String({ description: "A detailed description of the video to generate" })
-      }),
-      async execute(_id: string, params: Record<string, any>) {
-        const apiKey = getXaiKey(api);
-        if (!apiKey) {
-          throw new Error("xAI API key not found. Please bind the xAI provider or set XAI_API_KEY.");
-        }
-
-        const response = await fetch("https://api.x.ai/v1/videos/generations", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: "grok-imagine-video",
-            prompt: params.prompt,
-            duration: 10,
-            aspect_ratio: "16:9",
-            resolution: "720p"
-          })
-        });
-
-        if (!response.ok) {
-          const body = await response.text();
-          throw new Error(`xAI API Error: ${response.status} ${response.statusText} - ${body}`);
-        }
-
-        const { request_id } = await response.json() as any;
-        if (!request_id) {
-          throw new Error("No request_id returned from xAI Video API.");
-        }
-
-        let videoUrl = "";
-        let finalData: any = {};
-
-        // Polling loop
-        while (true) {
-          await new Promise(resolve => setTimeout(resolve, 5000));
-          
-          const pollRes = await fetch(`https://api.x.ai/v1/videos/${request_id}`, {
-            headers: { "Authorization": `Bearer ${apiKey}` }
-          });
-
-          if (!pollRes.ok) {
-            const body = await pollRes.text();
-            throw new Error(`xAI Video Poll Error: ${pollRes.status} ${pollRes.statusText} - ${body}`);
-          }
-
-          finalData = await pollRes.json() as any;
-
-          if (finalData.status === "done") {
-            videoUrl = finalData.video?.url;
-            break;
-          } else if (finalData.status === "expired" || finalData.status === "failed") {
-            throw new Error(`Video generation ${finalData.status}`);
-          }
-        }
-
-        return {
-          content: `Video generated successfully! URL: ${videoUrl}\nDuration: ${finalData.video?.duration}s`,
-          attachments: [
+          content: [
             {
-              type: "video",
-              url: videoUrl,
-              mimeType: "video/mp4"
-            }
-          ]
-        } as any;
+              type: "text",
+              text: "❌ XAI_API_KEY environment variable is required. Run: openclaw config set XAI_API_KEY your_key",
+            },
+          ],
+          details: { error: "missing_api_key" },
+        };
       }
-    });
-  }
-};
 
-export default plugin;
+      const response = await fetch(`${XAI_BASE_URL}/images/generations`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "grok-imagine-image",
+          prompt: params.prompt,
+          n: params.n ?? 1,
+          aspect_ratio: params.aspect_ratio,
+          response_format: "url",
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`xAI Image API error (${response.status}): ${err}`);
+      }
+
+      const data = await response.json();
+      const imageUrls: string[] =
+        data.data?.map((item: any) => item.url).filter(Boolean) ?? [];
+
+      const mediaLines = imageUrls.map((url) => `MEDIA:${url}`).join("\n");
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `✅ Generated ${imageUrls.length} image(s) with xAI Grok Imagine:\n\n${mediaLines}`,
+          },
+        ],
+        details: {
+          provider: "xai",
+          model: "grok-imagine-image",
+          imagesGenerated: imageUrls.length,
+          toolCallId,
+        },
+      };
+    },
+  });
+
+  // ====================== VIDEO GENERATION TOOL ======================
+  api.registerTool({
+    name: "xai_generate_video",
+    label: "xAI Grok Imagine Video",
+    description:
+      "Generate a short video clip using xAI Grok Imagine Video. Supports text-to-video and image-to-video. Returns MEDIA URL for native Telegram playback.",
+    parameters: Type.Object({
+      prompt: Type.String({
+        description:
+          "Detailed prompt describing the video (motion, style, audio hints)",
+      }),
+      duration_seconds: Type.Optional(
+        Type.Integer({
+          description: "Duration in seconds (1-15)",
+          minimum: 1,
+          maximum: 15,
+          default: 8,
+        }),
+      ),
+      aspect_ratio: Type.Optional(
+        Type.String({
+          description: 'Aspect ratio e.g. "16:9", "9:16"',
+          default: "16:9",
+        }),
+      ),
+      image_url: Type.Optional(
+        Type.String({
+          description: "Optional starting image URL for image-to-video mode",
+        }),
+      ),
+    }),
+    async execute(
+      toolCallId: string,
+      params: any,
+      _signal?: AbortSignal,
+      _onUpdate?: any,
+    ) {
+      const apiKey = process.env.XAI_API_KEY;
+      if (!apiKey) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "❌ XAI_API_KEY environment variable is required.",
+            },
+          ],
+          details: { error: "missing_api_key" },
+        };
+      }
+
+      // 1. Start generation
+      const startBody: any = {
+        model: "grok-imagine-video",
+        prompt: params.prompt,
+        duration: params.duration_seconds ?? 8,
+        aspect_ratio: params.aspect_ratio,
+      };
+      if (params.image_url) {
+        startBody.image = { url: params.image_url };
+      }
+
+      const startRes = await fetch(`${XAI_BASE_URL}/videos/generations`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(startBody),
+      });
+
+      if (!startRes.ok) {
+        const err = await startRes.text();
+        throw new Error(`xAI Video start error: ${err}`);
+      }
+
+      const { request_id } = await startRes.json();
+
+      // 2. Poll for completion (max ~3 minutes)
+      let videoUrl: string | null = null;
+      const MAX_POLLS = 36; // 5s * 36 = 3min
+      for (let i = 0; i < MAX_POLLS; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+
+        const pollRes = await fetch(
+          `${XAI_BASE_URL}/videos/generations/${request_id}`,
+          {
+            headers: { Authorization: `Bearer ${apiKey}` },
+          },
+        );
+
+        const pollData = await pollRes.json();
+
+        if (pollData.status === "completed" && pollData.video?.url) {
+          videoUrl = pollData.video.url;
+          break;
+        }
+        if (pollData.status === "failed") {
+          throw new Error(
+            `Video generation failed: ${pollData.error ?? "Unknown error"}`,
+          );
+        }
+      }
+
+      if (!videoUrl) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `⏳ Video generation started (ID: ${request_id}). It may take up to 3 minutes. Reply with the same prompt later to check status.`,
+            },
+          ],
+          details: { status: "pending", request_id, toolCallId },
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `✅ Video generated successfully with xAI Grok Imagine (${params.duration_seconds ?? 8}s):\n\nMEDIA:${videoUrl}`,
+          },
+        ],
+        details: {
+          provider: "xai",
+          model: "grok-imagine-video",
+          duration: params.duration_seconds ?? 8,
+          toolCallId,
+        },
+      };
+    },
+  });
+}
