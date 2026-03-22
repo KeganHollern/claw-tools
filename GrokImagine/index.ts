@@ -42,6 +42,7 @@ export default function register(api: OpenClawPluginApi) {
     ) {
       const apiKey = process.env.XAI_API_KEY;
       if (!apiKey) {
+        api.logger.error("XAI_API_KEY environment variable is missing");
         return {
           content: [
             {
@@ -53,6 +54,9 @@ export default function register(api: OpenClawPluginApi) {
         };
       }
 
+      api.logger.info(
+        `Generating xAI image. Prompt: ${params.prompt}, N: ${params.n}`,
+      );
       const response = await fetch(`${XAI_BASE_URL}/images/generations`, {
         method: "POST",
         headers: {
@@ -70,6 +74,9 @@ export default function register(api: OpenClawPluginApi) {
 
       if (!response.ok) {
         const err = await response.text();
+        api.logger.error(
+          `xAI Image API error. Status: ${response.status}, Error: ${err}`,
+        );
         throw new Error(`xAI Image API error (${response.status}): ${err}`);
       }
 
@@ -77,6 +84,9 @@ export default function register(api: OpenClawPluginApi) {
       const imageUrls: string[] =
         data.data?.map((item: any) => item.url).filter(Boolean) ?? [];
 
+      api.logger.info(
+        `xAI image generation successful. Count: ${imageUrls.length}`,
+      );
       const mediaLines = imageUrls.map((url) => `MEDIA:${url}`).join("\n");
 
       return {
@@ -135,6 +145,7 @@ export default function register(api: OpenClawPluginApi) {
     ) {
       const apiKey = process.env.XAI_API_KEY;
       if (!apiKey) {
+        api.logger.error("XAI_API_KEY environment variable is missing");
         return {
           content: [
             {
@@ -147,6 +158,9 @@ export default function register(api: OpenClawPluginApi) {
       }
 
       // 1. Start generation
+      api.logger.info(
+        `Starting xAI video generation. Prompt: ${params.prompt}, Duration: ${params.duration_seconds}`,
+      );
       const startBody: any = {
         model: "grok-imagine-video",
         prompt: params.prompt,
@@ -168,10 +182,14 @@ export default function register(api: OpenClawPluginApi) {
 
       if (!startRes.ok) {
         const err = await startRes.text();
+        api.logger.error(`xAI Video start error. Error: ${err}`);
         throw new Error(`xAI Video start error: ${err}`);
       }
 
       const { request_id } = await startRes.json();
+      api.logger.info(
+        `xAI video generation started. Request ID: ${request_id}`,
+      );
 
       // 2. Poll for completion (max ~3 minutes)
       let videoUrl: string | null = null;
@@ -187,12 +205,21 @@ export default function register(api: OpenClawPluginApi) {
         );
 
         const pollData = await pollRes.json();
+        api.logger.info(
+          `xAI video poll status. Request ID: ${request_id}, Status: ${pollData.status}`,
+        );
 
         if (pollData.status === "completed" && pollData.video?.url) {
           videoUrl = pollData.video.url;
+          api.logger.info(
+            `xAI video generation completed. Request ID: ${request_id}`,
+          );
           break;
         }
         if (pollData.status === "failed") {
+          api.logger.error(
+            `xAI video generation failed. Request ID: ${request_id}, Error: ${pollData.error}`,
+          );
           throw new Error(
             `Video generation failed: ${pollData.error ?? "Unknown error"}`,
           );
@@ -200,6 +227,9 @@ export default function register(api: OpenClawPluginApi) {
       }
 
       if (!videoUrl) {
+        api.logger.info(
+          `xAI video generation pending limit reached. Request ID: ${request_id}`,
+        );
         return {
           content: [
             {
