@@ -41,11 +41,15 @@ const plugin = {
         fs.writeFileSync(outputPath, Buffer.from(image.base64, "base64"));
         
         return {
-          content: [
-            { type: "text", text: `Image generated and saved to: ${outputPath}` }
-          ],
-          details: { path: outputPath }
-        };
+            content: `Image generated and saved to: ${outputPath}`,
+            attachments: [
+                {
+                    type: "image",
+                    path: outputPath,
+                    mimeType: "image/png"
+                }
+            ]
+        } as any;
       }
     });
 
@@ -115,11 +119,15 @@ const plugin = {
         }
 
         return {
-          content: [
-            { type: "text", text: `Video generated successfully! URL: ${videoUrl}\nDuration: ${finalData.video?.duration}s` }
-          ],
-          details: { videoUrl, finalData }
-        };
+          content: `Video generated successfully! URL: ${videoUrl}\nDuration: ${finalData.video?.duration}s`,
+          attachments: [
+            {
+              type: "video",
+              url: videoUrl,
+              mimeType: "video/mp4"
+            }
+          ]
+        } as any;
       }
     });
   }
