@@ -1,0 +1,31 @@
+{
+  "name": "@openclaw/grok-imagine",
+  "version": "1.0.0",
+  "description": "Grok Imagine Image and Video generation plugin for OpenClaw",
+  "type": "module",
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "openclaw",
+    "grok",
+    "imagine",
+    "image",
+    "video"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@sinclair/typebox": "^0.34.48",
+    "@types/node": "^25.5.0",
+    "openclaw": "^2026.3.13",
+    "typescript": "^5.9.3"
+  }
+}
