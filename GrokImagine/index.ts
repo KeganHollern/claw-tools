@@ -159,7 +159,7 @@ export default function register(api: OpenClawPluginApi) {
 
       // 1. Start generation
       api.logger.info(
-        `Starting xAI video generation. Prompt: ${params.prompt}, Duration: ${params.duration_seconds}`,
+        `Starting xAI video generation. Prompt: ${params.prompt}, Duration: ${params.duration_seconds}, Start Image: ${params.image_url}`,
       );
       const startBody: any = {
         model: "grok-imagine-video",
