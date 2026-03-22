@@ -1,25 +1,25 @@
-import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { Type } from "@sinclair/typebox";
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugins/types";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 
 function getXaiKey(api: OpenClawPluginApi): string | undefined {
-  const providers = api.config.providers as Record<string, any> | undefined;
+  const providers = (api.config as any).providers as Record<string, any> | undefined;
   return providers?.xai?.apiKey || process.env.XAI_API_KEY;
 }
 
-export default definePluginEntry({
+const plugin = {
   id: "grok-imagine",
   name: "Grok Imagine",
   description: "Provides image and video generation tools via xAI's Grok Imagine model",
-  register(api) {
+  register(api: OpenClawPluginApi) {
     // 1. Image Generation Tool
     api.registerTool({
       name: "grok_imagine_image",
+      label: "Grok Imagine Image",
       description: "Generate an image from a text prompt using the Grok Imagine model.",
       parameters: Type.Object({
         prompt: Type.String({ description: "A detailed description of the image to generate" })
       }),
-      async execute(_id, params) {
+      async execute(_id: string, params: Record<string, any>) {
         const apiKey = getXaiKey(api);
         if (!apiKey) {
           throw new Error("xAI API key not found. Please bind the xAI provider or set XAI_API_KEY.");
@@ -53,9 +53,9 @@ export default definePluginEntry({
 
         return {
           content: [
-            { type: "text", text: `Image generated successfully: ${imageUrl}` },
-            { type: "image_url", image_url: { url: imageUrl } }
-          ]
+            { type: "text", text: `Image generated successfully: ${imageUrl}` }
+          ],
+          details: { url: imageUrl }
         };
       }
     });
@@ -63,11 +63,12 @@ export default definePluginEntry({
     // 2. Video Generation Tool
     api.registerTool({
       name: "grok_imagine_video",
+      label: "Grok Imagine Video",
       description: "Generate a video from a text prompt using the Grok Imagine model.",
       parameters: Type.Object({
         prompt: Type.String({ description: "A detailed description of the video to generate" })
       }),
-      async execute(_id, params) {
+      async execute(_id: string, params: Record<string, any>) {
         const apiKey = getXaiKey(api);
         if (!apiKey) {
           throw new Error("xAI API key not found. Please bind the xAI provider or set XAI_API_KEY.");
@@ -103,9 +104,12 @@ export default definePluginEntry({
         return {
           content: [
             { type: "text", text: successText }
-          ]
+          ],
+          details: { videoUrl, data }
         };
       }
     });
   }
-});
+};
+
+export default plugin;
