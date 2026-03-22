@@ -193,7 +193,7 @@ export default function register(api: OpenClawPluginApi) {
 
       // 2. Poll for completion (max ~3 minutes)
       let videoUrl: string | null = null;
-      const MAX_POLLS = 36; // 5s * 36 = 3min
+      const MAX_POLLS = 36 * 2; // 5s * 36 = 6min
       for (let i = 0; i < MAX_POLLS; i++) {
         await new Promise((r) => setTimeout(r, 5000));
 
