@@ -198,12 +198,9 @@ export default function register(api: OpenClawPluginApi) {
       for (let i = 0; i < MAX_POLLS; i++) {
         await new Promise((r) => setTimeout(r, 5000));
 
-        const pollRes = await fetch(
-          `${XAI_BASE_URL}/videos/generations/${request_id}`,
-          {
-            headers: { Authorization: `Bearer ${apiKey}` },
-          },
-        );
+        const pollRes = await fetch(`${XAI_BASE_URL}/videos/${request_id}`, {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        });
 
         const pollData = await pollRes.json();
         api.logger.info(
