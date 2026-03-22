@@ -1,0 +1,11 @@
+{
+    "id": "grok-imagine",
+    "name": "Grok Imagine",
+    "description": "Image and video generation tools via xAI's Grok Imagine model",
+    "version": "1.0.0",
+    "configSchema": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {}
+    }
+}
