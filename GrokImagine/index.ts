@@ -214,7 +214,7 @@ export default function register(api: OpenClawPluginApi) {
           );
           break;
         }
-        if (pollData.status === "failed") {
+        if (pollData.status === "failed" || pollData.error) {
           api.logger.error(
             `xAI video generation failed. Request ID: ${request_id}, Error: ${pollData.error}`,
           );
