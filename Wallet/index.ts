@@ -28,7 +28,7 @@ export function getPublicClient(): PublicClient<HttpTransport, Chain> {
 }
 
 export function getWalletClient(): WalletClient<HttpTransport, Chain, Account> {
-    if (!walletClient) throw new Error("Wallet plugin service not started yet");
+    if (!walletClient) throw new Error("Wallet not initialized");
     return walletClient;
 }
 
@@ -68,7 +68,7 @@ export default function register(api: OpenClawPluginApi) {
     });
 
     // ─────────────────────────────────────────────────────────────
-    //  Tools (unchanged except minor description cleanup)
+    //  Tools (your existing tools with logging unchanged)
     // ─────────────────────────────────────────────────────────────
 
     api.registerTool({
@@ -207,6 +207,60 @@ export default function register(api: OpenClawPluginApi) {
             return {
                 content: [{ type: "text", text: `Contract write successful!\nTransaction hash: ${hash}` }],
                 details: { txHash: hash, toolCallId }
+            };
+        }
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    //  NEW: ENS Resolution Tools (fixes the revert you saw)
+    // ─────────────────────────────────────────────────────────────
+
+    api.registerTool({
+        name: "resolve_ens",
+        label: "Resolve ENS Name",
+        description: "Resolve an ENS domain (e.g. 'vitalik.eth') to its Ethereum address. Supports subdomains. Returns null if not set.",
+        parameters: Type.Object({
+            name: Type.String({ description: "ENS name, e.g. vitalik.eth or sub.example.eth" })
+        }),
+        async execute(toolCallId: string, params: any) {
+            api.logger.info(`Executing resolve_ens [${toolCallId}] for name: ${params.name}`);
+            if (!publicClient) {
+                api.logger.error(`resolve_ens [${toolCallId}] failed: Wallet not initialized`);
+                throw new Error("Wallet not initialized");
+            }
+            const address = await publicClient.getEnsAddress({ name: params.name });
+            const text = address
+                ? `✅ ENS ${params.name} resolves to ${address}`
+                : `❌ ENS ${params.name} does not resolve to any address (or is not registered)`;
+            api.logger.info(`resolve_ens [${toolCallId}] successful: ${address || 'null'}`);
+            return {
+                content: [{ type: "text", text }],
+                details: { ensName: params.name, resolvedAddress: address, toolCallId }
+            };
+        }
+    });
+
+    api.registerTool({
+        name: "get_ens_name_for_address",
+        label: "Get ENS Name for Address",
+        description: "Reverse-resolve an Ethereum address to its primary ENS name (if set).",
+        parameters: Type.Object({
+            address: Type.String({ description: "Ethereum address starting with 0x" })
+        }),
+        async execute(toolCallId: string, params: any) {
+            api.logger.info(`Executing get_ens_name_for_address [${toolCallId}] for address: ${params.address}`);
+            if (!publicClient) {
+                api.logger.error(`get_ens_name_for_address [${toolCallId}] failed: Wallet not initialized`);
+                throw new Error("Wallet not initialized");
+            }
+            const name = await publicClient.getEnsName({ address: params.address as `0x${string}` });
+            const text = name
+                ? `✅ ${params.address} has ENS name: ${name}`
+                : `❌ ${params.address} does not have a primary ENS name set`;
+            api.logger.info(`get_ens_name_for_address [${toolCallId}] successful: ${name || 'null'}`);
+            return {
+                content: [{ type: "text", text }],
+                details: { address: params.address, ensName: name, toolCallId }
             };
         }
     });
