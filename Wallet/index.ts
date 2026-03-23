@@ -77,7 +77,12 @@ export default function register(api: OpenClawPluginApi) {
         description: "Get the Ethereum address of the agent's configured wallet.",
         parameters: Type.Object({}),
         async execute(toolCallId: string) {
-            if (!activeAccount) throw new Error("Wallet not initialized");
+            api.logger.info(`Executing get_wallet_address [${toolCallId}]`);
+            if (!activeAccount) {
+                api.logger.error(`get_wallet_address [${toolCallId}] failed: Wallet not initialized`);
+                throw new Error("Wallet not initialized");
+            }
+            api.logger.info(`get_wallet_address [${toolCallId}] successful`);
             return {
                 content: [{ type: "text", text: `Your configured Ethereum wallet address is: ${activeAccount.address}` }],
                 details: { address: activeAccount.address, toolCallId }
@@ -93,10 +98,15 @@ export default function register(api: OpenClawPluginApi) {
             address: Type.Optional(Type.String({ description: "Ethereum address starting with 0x" }))
         }),
         async execute(toolCallId: string, params: any) {
-            if (!publicClient || !activeAccount) throw new Error("Wallet not initialized");
+            api.logger.info(`Executing get_eth_balance [${toolCallId}] for address: ${params.address || 'self'}`);
+            if (!publicClient || !activeAccount) {
+                api.logger.error(`get_eth_balance [${toolCallId}] failed: Wallet not initialized`);
+                throw new Error("Wallet not initialized");
+            }
             const targetAddress = (params.address || activeAccount.address) as `0x${string}`;
             const balanceWei = await publicClient.getBalance({ address: targetAddress });
             const balanceEth = formatEther(balanceWei);
+            api.logger.info(`get_eth_balance [${toolCallId}] successful: ${balanceEth} ETH`);
             return {
                 content: [{ type: "text", text: `Balance of ${targetAddress} is ${balanceEth} ETH` }],
                 details: { address: targetAddress, balanceEth, balanceWei: balanceWei.toString(), toolCallId }
@@ -113,10 +123,15 @@ export default function register(api: OpenClawPluginApi) {
             amountStr: Type.String({ description: "Amount in ETH (as a string, e.g. '0.01')" })
         }),
         async execute(toolCallId: string, params: any) {
-            if (!walletClient || !activeAccount) throw new Error("Wallet not initialized");
+            api.logger.info(`Executing send_eth [${toolCallId}] to send ${params.amountStr} ETH to ${params.to}`);
+            if (!walletClient || !activeAccount) {
+                api.logger.error(`send_eth [${toolCallId}] failed: Wallet not initialized`);
+                throw new Error("Wallet not initialized");
+            }
             const to = params.to as `0x${string}`;
             const value = parseEther(params.amountStr);
             const hash = await walletClient.sendTransaction({ to, value });
+            api.logger.info(`send_eth [${toolCallId}] successful. Tx hash: ${hash}`);
             return {
                 content: [{ type: "text", text: `Successfully sent ${params.amountStr} ETH to ${to}.\nTransaction hash: ${hash}` }],
                 details: { txHash: hash, to, amount: params.amountStr, toolCallId }
@@ -135,7 +150,11 @@ export default function register(api: OpenClawPluginApi) {
             args: Type.Optional(Type.Array(Type.Any(), { description: "Arguments for the function call" }))
         }),
         async execute(toolCallId: string, params: any) {
-            if (!publicClient) throw new Error("Wallet not initialized");
+            api.logger.info(`Executing read_contract [${toolCallId}] on ${params.address} for ${params.functionName}`);
+            if (!publicClient) {
+                api.logger.error(`read_contract [${toolCallId}] failed: Wallet not initialized`);
+                throw new Error("Wallet not initialized");
+            }
             const abi = parseAbi(params.abiSignatures as string[]);
             const data = await publicClient.readContract({
                 address: params.address as `0x${string}`,
@@ -146,6 +165,7 @@ export default function register(api: OpenClawPluginApi) {
             const resultStr = typeof data === 'bigint'
                 ? data.toString()
                 : JSON.stringify(data, (key, value) => typeof value === 'bigint' ? value.toString() : value);
+            api.logger.info(`read_contract [${toolCallId}] successful. Result: ${resultStr}`);
             return {
                 content: [{ type: "text", text: `Contract read successful.\nResult: ${resultStr}` }],
                 details: { result: resultStr, toolCallId }
@@ -165,7 +185,11 @@ export default function register(api: OpenClawPluginApi) {
             valueStr: Type.Optional(Type.String({ description: "Amount of ETH to send along with transaction (as string)" }))
         }),
         async execute(toolCallId: string, params: any) {
-            if (!walletClient || !publicClient || !activeAccount) throw new Error("Wallet not initialized");
+            api.logger.info(`Executing write_contract [${toolCallId}] on ${params.address} for ${params.functionName}`);
+            if (!walletClient || !publicClient || !activeAccount) {
+                api.logger.error(`write_contract [${toolCallId}] failed: Wallet not initialized`);
+                throw new Error("Wallet not initialized");
+            }
             const abi = parseAbi(params.abiSignatures as string[]);
             const value = params.valueStr ? parseEther(params.valueStr) : undefined;
 
@@ -179,6 +203,7 @@ export default function register(api: OpenClawPluginApi) {
             });
 
             const hash = await walletClient.writeContract(request);
+            api.logger.info(`write_contract [${toolCallId}] successful. Tx hash: ${hash}`);
             return {
                 content: [{ type: "text", text: `Contract write successful!\nTransaction hash: ${hash}` }],
                 details: { txHash: hash, toolCallId }
