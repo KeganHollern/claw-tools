@@ -1,17 +1,17 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { Type } from "@sinclair/typebox";
-import { 
-    createPublicClient, 
-    createWalletClient, 
-    http, 
-    parseAbi, 
-    parseEther, 
+import {
+    createPublicClient,
+    createWalletClient,
+    http,
+    parseAbi,
+    parseEther,
     formatEther,
-    type PublicClient, 
-    type WalletClient, 
-    type HttpTransport, 
-    type Chain, 
-    type Account 
+    type PublicClient,
+    type WalletClient,
+    type HttpTransport,
+    type Chain,
+    type Account
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { mainnet } from 'viem/chains';
@@ -43,7 +43,6 @@ export default function register(api: OpenClawPluginApi) {
                     pk = fs.readFileSync(keyPath, 'utf8').trim();
                 } else {
                     pk = generatePrivateKey();
-                    // Ensure the state directory exists
                     if (!fs.existsSync(ctx.stateDir)) {
                         fs.mkdirSync(ctx.stateDir, { recursive: true });
                     }
@@ -54,8 +53,8 @@ export default function register(api: OpenClawPluginApi) {
 
             let rpcUrl = process.env.ETH_RPC_URL;
             if (!rpcUrl) {
-                ctx.logger.warn("ETH_RPC_URL is missing. Defaulting to Cloudflare public provider. Rate limits may apply!");
-                rpcUrl = "https://cloudflare-eth.com";
+                ctx.logger.warn("ETH_RPC_URL is missing. Defaulting to PublicNode public provider (free, fast, privacy-focused, no API key needed). Rate limits may still apply under heavy usage.");
+                rpcUrl = "https://ethereum-rpc.publicnode.com";
             }
 
             const transport = http(rpcUrl);
@@ -63,10 +62,14 @@ export default function register(api: OpenClawPluginApi) {
 
             publicClient = createPublicClient({ chain: mainnet, transport });
             walletClient = createWalletClient({ account: activeAccount, chain: mainnet, transport });
-            
-            ctx.logger.info(`Wallet configured. Address: ${activeAccount.address}`);
+
+            ctx.logger.info(`Wallet configured. Address: ${activeAccount.address} | RPC: ${rpcUrl}`);
         }
     });
+
+    // ─────────────────────────────────────────────────────────────
+    //  Tools (unchanged except minor description cleanup)
+    // ─────────────────────────────────────────────────────────────
 
     api.registerTool({
         name: "get_wallet_address",
@@ -127,7 +130,7 @@ export default function register(api: OpenClawPluginApi) {
         description: "Call a read-only smart contract function. Provide the address, human-readable ABI signatures, function name, and arguments array.",
         parameters: Type.Object({
             address: Type.String({ description: "Contract address" }),
-            abiSignatures: Type.Array(Type.String(), { description: "Array of human-readable ABI signatures (e.g. ['function balanceOf(address owner) view returns (uint256)'])"}),
+            abiSignatures: Type.Array(Type.String(), { description: "Array of human-readable ABI signatures (e.g. ['function balanceOf(address owner) view returns (uint256)'])" }),
             functionName: Type.String({ description: "Name of the function to call" }),
             args: Type.Optional(Type.Array(Type.Any(), { description: "Arguments for the function call" }))
         }),
@@ -140,8 +143,9 @@ export default function register(api: OpenClawPluginApi) {
                 functionName: params.functionName,
                 args: params.args as any[] | undefined
             });
-            // serialize BigInts to avoid JSON.stringify errors
-            const resultStr = typeof data === 'bigint' ? data.toString() : JSON.stringify(data, (key, value) => typeof value === 'bigint' ? value.toString() : value);
+            const resultStr = typeof data === 'bigint'
+                ? data.toString()
+                : JSON.stringify(data, (key, value) => typeof value === 'bigint' ? value.toString() : value);
             return {
                 content: [{ type: "text", text: `Contract read successful.\nResult: ${resultStr}` }],
                 details: { result: resultStr, toolCallId }
@@ -155,7 +159,7 @@ export default function register(api: OpenClawPluginApi) {
         description: "Execute a state-changing transaction on a smart contract. Provide the address, human-readable ABI signatures, function name, and arguments array.",
         parameters: Type.Object({
             address: Type.String({ description: "Contract address" }),
-            abiSignatures: Type.Array(Type.String(), { description: "Array of human-readable ABI signatures (e.g. ['function transfer(address to, uint256 amount) returns (bool)'])"}),
+            abiSignatures: Type.Array(Type.String(), { description: "Array of human-readable ABI signatures (e.g. ['function transfer(address to, uint256 amount) returns (bool)'])" }),
             functionName: Type.String({ description: "Name of the function to call" }),
             args: Type.Optional(Type.Array(Type.Any(), { description: "Arguments for the function call" })),
             valueStr: Type.Optional(Type.String({ description: "Amount of ETH to send along with transaction (as string)" }))
@@ -164,7 +168,7 @@ export default function register(api: OpenClawPluginApi) {
             if (!walletClient || !publicClient || !activeAccount) throw new Error("Wallet not initialized");
             const abi = parseAbi(params.abiSignatures as string[]);
             const value = params.valueStr ? parseEther(params.valueStr) : undefined;
-            
+
             const { request } = await publicClient.simulateContract({
                 account: activeAccount,
                 address: params.address as `0x${string}`,
