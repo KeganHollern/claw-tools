@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-plugins:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        plugin: [GrokImagine, Wallet]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+        cache-dependency-path: ${{ matrix.plugin }}/package-lock.json
+        
+    - name: Install dependencies
+      working-directory: ./${{ matrix.plugin }}
+      run: npm ci
+      
+    - name: Check compilation
+      working-directory: ./${{ matrix.plugin }}
+      run: npx tsc --noEmit
